@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STASIUN SENJA — Tactical FPS</title>
+<style>
+  :root { --canvas:#0d1420; --surface:#1a2233; --hairline:#2b3547; --ink:#f2ead8; --muted:#8fa3b8; --accent:#f5a623; --teal:#37c8c3; --red:#e5484d; --font-ui:system-ui,-apple-system,'Segoe UI',sans-serif; --font-readout:ui-monospace,'SF Mono',Menlo,monospace; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; overflow:hidden; background:var(--canvas); color:var(--ink); font-family:var(--font-ui); }
+  #game,#game canvas { position:fixed; inset:0; display:block; }
+  #hud { position:fixed; inset:0; pointer-events:none; }
+  #crosshair { position:fixed; left:50%; top:50%; width:34px; height:34px; transform:translate(-50%,-50%); --gap:5px; }
+  #crosshair::after { content:''; position:absolute; left:16px; top:16px; width:2px; height:2px; background:var(--ink); border-radius:50%; }
+  #crosshair i { position:absolute; background:var(--ink); opacity:.95; }
+  #crosshair i:nth-child(1){left:16px;top:var(--gap);width:2px;height:8px} #crosshair i:nth-child(2){left:16px;bottom:var(--gap);width:2px;height:8px}
+  #crosshair i:nth-child(3){top:16px;left:var(--gap);height:2px;width:8px} #crosshair i:nth-child(4){top:16px;right:var(--gap);height:2px;width:8px}
+  #crosshair.firing i { background:var(--accent); }
+  #dmgnum { position:fixed; left:50%; top:44%; font-family:var(--font-readout); font-weight:700; font-size:17px; color:var(--accent); opacity:0; pointer-events:none; text-shadow:0 1px 6px #000; transform:translate(-50%,-50%); }
+  #dmgnum.show { opacity:1; } #dmgnum.head { color:#ff7a1a; font-size:20px; } #dmgnum.kill { color:var(--red); font-size:23px; }
+  #grenades { font-size:13px; color:var(--accent); } #grenades.empty { color:var(--muted); } #damage-value { font-size:12px; color:var(--muted); display:block; }
+  #touch-ui { display:none; } body.touch #touch-ui { display:block; }
+  #look-area { position:fixed; right:0; top:0; width:55%; height:100%; touch-action:none; z-index:5; }
+  #joy { position:fixed; left:22px; bottom:110px; width:124px; height:124px; border:2px solid rgba(242,234,216,.45); border-radius:50%; background:rgba(26,34,51,.5); z-index:6; touch-action:none; }
+  #joy-knob { position:absolute; left:50%; top:50%; width:54px; height:54px; border-radius:50%; background:rgba(242,234,216,.75); transform:translate(-50%,-50%); }
+  .tbtn { position:fixed; z-index:7; border-radius:50%; border:2px solid rgba(242,234,216,.6); background:rgba(26,34,51,.65); color:var(--ink); font:700 13px var(--font-ui); touch-action:none; display:grid; place-items:center; text-align:center; }
+  #btn-fire { right:22px; bottom:110px; width:96px; height:96px; font-size:16px; border-color:var(--accent); background:rgba(245,166,35,.35); }
+  #btn-jump { right:132px; bottom:210px; width:58px; height:58px; } #btn-reload { right:132px; bottom:140px; width:58px; height:58px; }
+  #btn-crouch { right:28px; bottom:220px; width:58px; height:58px; } #btn-grenade { right:200px; bottom:110px; width:58px; height:58px; border-color:#ff7a1a; }
+  #btn-shop { right:200px; bottom:180px; width:58px; height:58px; }
+  @media (max-width:700px){ #health-value,#ammo-mag{font-size:38px} #topbar{font-size:12px;gap:10px;padding:6px 10px} #banner-title{font-size:30px} }
+  #hitmarker { position:fixed; left:50%; top:50%; width:26px; height:26px; transform:translate(-50%,-50%) rotate(45deg); opacity:0; transition:opacity 90ms linear; }
+  #hitmarker.on { opacity:1; } #hitmarker i { position:absolute; background:var(--accent); }
+  #hitmarker[data-kind="head"] i { background:#ff7a1a; } #hitmarker[data-kind="kill"] i { background:var(--red); }
+  #hitmarker i:nth-child(1){left:12px;top:0;width:2px;height:8px} #hitmarker i:nth-child(2){left:12px;bottom:0;width:2px;height:8px}
+  #hitmarker i:nth-child(3){top:12px;left:0;height:2px;width:8px} #hitmarker i:nth-child(4){top:12px;right:0;height:2px;width:8px}
+  #topbar { position:fixed; top:16px; left:50%; transform:translateX(-50%); display:flex; gap:18px; align-items:center; background:rgba(13,20,32,.75); border:1px solid var(--hairline); border-radius:6px; padding:8px 18px; font-family:var(--font-readout); font-size:15px; }
+  #topbar b { color:var(--accent); font-size:20px; } #timer-value { color:var(--accent); font-weight:700; }
+  #site-value { position:fixed; top:64px; left:50%; transform:translateX(-50%); font-family:var(--font-readout); font-size:12px; color:var(--muted); letter-spacing:.12em; }
+  #bomb-value { position:fixed; top:84px; left:50%; transform:translateX(-50%); font-family:var(--font-readout); font-size:13px; color:var(--accent); font-weight:700; }
+  #health { position:fixed; left:32px; bottom:24px; font-family:var(--font-readout); } #health-value { font-size:52px; line-height:1; } #health.low #health-value { color:var(--red); }
+  #health span.lbl, #ammo span.lbl { font-size:12px; color:var(--muted); display:block; letter-spacing:.14em; }
+  #ammo { position:fixed; right:32px; bottom:24px; text-align:right; font-family:var(--font-readout); } #ammo-mag { font-size:52px; line-height:1; } #ammo-reserve { font-size:16px; color:var(--muted); } #ammo.empty #ammo-mag { color:var(--accent); }
+  #weapon-name { font-size:13px; color:var(--muted); } #money-value { font-size:15px; color:var(--accent); }
+  #feed { position:fixed; right:32px; top:110px; text-align:right; font-size:13px; color:var(--muted); display:grid; gap:4px; }
+  #banner { position:fixed; left:50%; top:32%; transform:translate(-50%,-50%) scale(.96); text-align:center; opacity:0; transition:opacity 200ms; pointer-events:none; }
+  #banner.show { opacity:1; transform:translate(-50%,-50%) scale(1); } #banner-title { font-size:44px; font-weight:700; letter-spacing:.02em; text-shadow:0 2px 18px #000; } #banner-sub { color:var(--muted); margin-top:6px; }
+  #buy { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); background:var(--surface); border:1px solid var(--hairline); border-radius:8px; padding:20px 24px; width:340px; pointer-events:none; }
+  #buy[hidden]{display:none} #buy h2 { margin:0 0 10px; font-size:18px; } #buy div { display:flex; justify-content:space-between; padding:7px 0; border-top:1px solid var(--hairline); font-family:var(--font-readout); font-size:14px; } #buy kbd { border:1px solid var(--hairline); border-radius:4px; padding:1px 7px; }
+  .overlay { position:fixed; inset:0; display:grid; place-items:center; padding:24px; background:rgba(13,20,32,.86); }
+  .overlay[hidden]{display:none} .panel { width:min(460px,100%); padding:32px; background:var(--surface); border:1px solid var(--hairline); border-radius:6px; }
+  .panel h1 { margin:0 0 8px; font-size:32px; } .panel p { margin:0 0 24px; color:var(--muted); line-height:1.5; }
+  #play { font:inherit; font-weight:600; padding:12px 16px; border:1px solid var(--accent); border-radius:8px; background:var(--accent); color:var(--canvas); cursor:pointer; }
+  .keys { margin:24px 0 0; padding:0; list-style:none; display:grid; gap:8px; font-size:14px; color:var(--muted); }
+  .keys kbd { border:1px solid var(--hairline); border-radius:4px; padding:2px 6px; font-family:var(--font-readout); font-size:12px; color:var(--ink); }
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="hud" aria-hidden="true">
+  <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+  <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
+  <div id="dmgnum"></div>
+  <div id="topbar"><span>SENJA <b id="score-atk">0</b></span><span id="round-value">RONDE 1/9</span><span id="timer-value">12s</span><span>PENJAGA <b id="score-def">0</b></span><span id="alive-value">3 vs 3</span></div>
+  <div id="site-value">TARGET: A — PERON BARAT</div>
+  <div id="bomb-value">BOM BELUM DITANAM</div>
+  <div id="health"><span class="lbl">HEALTH</span><span id="health-value">100</span></div>
+  <div id="ammo"><span class="lbl"><span id="weapon-name">Kestrel P9</span> · <span id="money-value">$800</span> · <span id="grenade-value">GRANAT ×1</span></span><span id="ammo-mag">12</span><span id="ammo-reserve">/ 48</span><span id="damage-value"></span></div>
+  <div id="feed"></div>
+  <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
+  <div id="buy" hidden><h2>Toko Senjata — tekan 1-4</h2>
+    <div><span><kbd>1</kbd> Kestrel P9</span><span>$0</span></div>
+    <div><span><kbd>2</kbd> Rimba SMG</span><span>$900</span></div>
+    <div><span><kbd>3</kbd> Garuda AR</span><span>$2.100</span></div>
+    <div><span><kbd>4</kbd> Elang DMR</span><span>$3.200</span></div>
+  </div>
+</div>
+<div id="touch-ui">
+  <div id="look-area"></div>
+  <div id="joy"><div id="joy-knob"></div></div>
+  <button type="button" class="tbtn" id="btn-fire">TEMBAK</button>
+  <button type="button" class="tbtn" id="btn-jump">LOMPAT</button>
+  <button type="button" class="tbtn" id="btn-reload">ISI</button>
+  <button type="button" class="tbtn" id="btn-crouch">JONGKOK</button>
+  <button type="button" class="tbtn" id="btn-grenade">GRANAT</button>
+  <button type="button" class="tbtn" id="btn-shop">TOKO</button>
+</div>
+<div id="overlay" class="overlay">
+  <section class="panel" role="dialog" aria-modal="true" aria-labelledby="overlay-title">
+    <h1 id="overlay-title">STASIUN SENJA</h1>
+    <p id="overlay-copy">Stasiun kereta tua, malam hari. Plant bom di Peron Barat (A) atau Gudang Timur (B), atau habisi semua Penjaga. Klik untuk main.</p>
+    <button id="play" type="button">Klik untuk main</button>
+    <ul class="keys">
+      <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Gerak · <kbd>Shift</kbd> Lari · <kbd>Mouse</kbd> Arah · <kbd>Klik</kbd> Tembak</li>
+      <li><kbd>R</kbd> Reload · <kbd>E</kbd> Plant bom (tahan, di site) · <kbd>G</kbd> Lempar granat</li>
+      <li><kbd>B</kbd> Toko senjata · <kbd>1</kbd>-<kbd>4</kbd> Beli senjata · <kbd>Ctrl</kbd>/<kbd>C</kbd> Jongkok · <kbd>Space</kbd> Lompat</li>
+      <li>Di HP: joystick kiri untuk gerak, seret kanan layar untuk melihat, tombol TEMBAK besar di kanan bawah.</li>
+    </ul>
+  </section>
+</div>
+<script type="importmap">{ "imports": { "three": "./vendor/three/three.module.min.js" } }</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
